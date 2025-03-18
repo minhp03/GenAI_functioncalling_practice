@@ -7,7 +7,7 @@ import pandas as pd
 #hmm
 import inspect
 from pydantic import TypeAdapter
-from pydantic import Basemodel
+from pydantic import BaseModel
 from openai import OpenAI
 load_dotenv()
 
@@ -22,8 +22,7 @@ def get_symbol(company: str) -> str:
     data = response.json()
     return data["quotes"][0]["symbol"]
 
-
-print(get_symbol("Apple Inc."))
+#print(get_symbol("Apple Inc."))
 
 def get_stock_price(symbol: str):
     stock = yf.Ticker(symbol)
@@ -38,7 +37,16 @@ def get_stock_price(symbol: str):
         "volume": latest["Volume"]
     }
 
-print(get_stock_price("AAPL"))
+#print(get_stock_price("AAPL"))
+from pprint import pprint
+print(get_symbol("Nvidia"))
+
+nvidia_symbol = get_symbol("Nvidia")
+print("nvdia symbol: ", nvidia_symbol)
+
+pprint(get_stock_price(nvidia_symbol))
+
+
 
 tool = [
     {
@@ -48,19 +56,66 @@ tool = [
         "description": inspect.getdoc(get_symbol),
         "parameters": TypeAdapter(get_symbol).json_schema()
     }
+    },
+    {
+        "type":"function",
+        "function":{
+        "name":"get_stock_price",
+        "description": inspect.getdoc(get_stock_price),
+        "parameters": TypeAdapter(get_stock_price).json_schema()
+    }
     }
 ]
 
 print(tool)
 
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY)"))
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def get_completion(messages):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=messages,
+        tools=tool,
+        temperature = 0
+    )
+    return response
 
-message = [
+
+#Question 1 , there are 2 type of asking question.
+
+# 1) together
+
+# message = [
+#     {
+#         "role":"system",
+#         "content": "you are a helpful assistant that can retreive stock prices for a given company"
+#     },{
+#         "role":"user",
+#         "content": "Mã chứng khoán của Vin fast là gì."
+#     }
+# ]
+
+#2) seperate
+
+question = "Mã chứng khoán của Vin fast là gì."
+
+messages = [
     {
         "role":"system",
-        "content": "you are a helpful assistant thatcan retreive stock prices for a given company"
+        "content": "you are a helpful assistant .Use the supplied tools to assist the user"}
+    ,{
+        "role":"user",
+        "content": question
     }
 ]
+
+response = get_completion(messages)
+first_choice = response.choices[0]
+
+finish_reason = first_choice.finish_reason
+
+#pprint(response)
+print("finish reason: ", finish_reason)
+
                 
-                
+
