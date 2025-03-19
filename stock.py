@@ -3,6 +3,7 @@ import requests
 from dotenv import load_dotenv
 import yfinance as yf
 import pandas as pd 
+import json
 
 #hmm
 import inspect
@@ -112,10 +113,67 @@ messages = [
 response = get_completion(messages)
 first_choice = response.choices[0]
 
+#allow to handle diferent scenarios .
 finish_reason = first_choice.finish_reason
-
 #pprint(response)
-print("finish reason: ", finish_reason)
+#print("finish reason: ", finish_reason)
 
-                
+
+import json
+if first_choice.finish_reason == "tool_calls":
+    tool_call = first_choice.message.tool_calls[0]
+    # Lấy tên hàm và các biến cần truyền vào
+    tool_call_function = tool_call.function
+    tool_call_arguments = json.loads(tool_call_function.arguments)
+    # Ở đây có nhiều hàm, nên ta phải check `name` để chọn hàm cần gọi
+    if tool_call_function.name == "get_symbol":
+        result = get_symbol(tool_call_arguments.get("company"))
+    elif tool_call_function.name == "get_stock_price":
+        result = get_stock_price(tool_call_arguments.get("symbol"))
+    messages.append(first_choice.message)
+    messages.append({
+        "role": "tool",
+        "tool_call_id": tool_call.id,
+        "name": tool_call_function.name,
+        "content": json.dumps({"result": result})
+    })
+    pprint(messages)
+    # Đưa message cho LLM, chờ kết quả về
+    response = get_completion(messages)
+    result = response.choices[0].message.content
+    print(result)
+
+
+FUNCTION_MAP = {
+    "get_symbol": get_symbol,
+    "get_stock_price": get_stock_price
+}
+
+while finish_reason != "stop":
+    
+    pprint(first_choice)
+    tool_call = first_choice.message.tool_calls[0]
+
+    tool_call_function = tool_call.function
+    tool_call_arguments = json.loads(tool_call_function.arguments)
+
+    tool_function = FUNCTION_MAP[tool_call_function.name]
+    result = tool_function(**tool_call_arguments)
+    print(f"Call {tool_call_function.name} with params {tool_call_arguments} and got result {result}")
+
+    messages.append(first_choice.message)
+    messages.append({
+        "role":"tool",
+        "tool_call_id": tool_call.id,
+        "name": tool_call_function.name,
+        "content": json.dumps({"result": result})
+    })
+
+    pprint(messages)
+
+    response = get_completion(messages)
+    first_choice = response.choices[0]
+    finish_reason = first_choice.finish_reason
+
+print(first_choice.message.content)
 
